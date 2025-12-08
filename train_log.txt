@@ -1,0 +1,12 @@
+Raw train columns: ['"""""fixed acidity""""', '""""volatile acidity""""', '""""citric acid""""', '""""residual sugar""""', '""""chlorides""""', '""""free sulfur dioxide""""', '""""total sulfur dioxide""""', '""""density""""', '""""pH""""', '""""sulphates""""', '""""alcohol""""', '""""quality"""""']
+Raw val columns  : ['"""fixed acidity""""', '""""volatile acidity""""', '""""citric acid""""', '""""residual sugar""""', '""""chlorides""""', '""""free sulfur dioxide""""', '""""total sulfur dioxide""""', '""""density""""', '""""pH""""', '""""sulphates""""', '""""alcohol""""', '""""quality"""""']
+Clean train columns: ['f0', 'f1', 'f2', 'f3', 'f4', 'f5', 'f6', 'f7', 'f8', 'f9', 'f10', 'quality']
+Clean val columns  : ['f0', 'f1', 'f2', 'f3', 'f4', 'f5', 'f6', 'f7', 'f8', 'f9', 'f10', 'quality']
+PARAMS regParam=0.01, maxIter=50, F1=0.5718362260106016
+PARAMS regParam=0.01, maxIter=100, F1=0.5718362260106016
+PARAMS regParam=0.1, maxIter=50, F1=0.5441369018288305
+PARAMS regParam=0.1, maxIter=100, F1=0.5441369018288305
+PARAMS regParam=0.5, maxIter=50, F1=0.5029736467236468
+PARAMS regParam=0.5, maxIter=100, F1=0.5029736467236468
+BEST_PARAMS regParam=0.01, maxIter=50
+BEST_F1=0.5718362260106016
