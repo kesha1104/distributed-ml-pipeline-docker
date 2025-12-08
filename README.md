@@ -1,106 +1,95 @@
-# Wine Quality — CS643 Project
+**CS643 — Project 2 (PA2) — Wine Quality**
 
-This repository contains scripts for training and evaluating a Spark ML pipeline on the Wine Quality dataset.
+**Name**- **Kesha Dave**
 
-**Repository layout**
-- `train.py`: Training script that renames CSV columns to `f0..fN` and `quality`, tunes `LogisticRegression`, and saves a `PipelineModel`.
-- `predict.py`: Loads a saved `PipelineModel`, renames test CSV columns to `f0..fN`/`quality`, runs predictions, and prints an `F1=` line.
-- `code/train_model.py`: Alternate training script (RandomForest) with a different CLI and slightly different preprocessing.
-- `model_lr/`: Example saved model directory (contains pipeline metadata and stages).
-- `TrainingDataset.csv`, `ValidationDataset.csv`: example datasets used by the scripts.
-- `requirements.txt`: Python dependencies (needs cleanup — see Notes).
-- `Dockerfile`: Container image for running prediction (needs JAVA_HOME fix — see Notes).
+**Links**
+
+
+Dockerhub link 
+https://hub.docker.com/repository/docker/kesha1104/cs643-wine-kesha/general 
+
+Github link 
+https://github.com/kesha1104/cs643-853-pa2-kd473
+
+**Quick summary**
+- Training: parallel Spark training on 4 EC2 instances (use AWS EMR / Flintrock / other). Save model to S3.
+- Prediction: single EC2 instance (without Docker), then build and deploy a Docker container for prediction on an EC2 instance.
 
 **Prerequisites**
-- Java 11+ (PySpark needs a JVM). Ensure `java -version` works in your environment.
-- Python 3.8+ and `pip`.
-- PySpark compatible with your Java/Python versions. This repo lists `pyspark==3.5.1` in `requirements.txt`.
+- AWS account with IAM permissions, AWS CLI configured.
+- Java 11+, Python 3.8+, Docker (for container step).
 
-**Install (recommended local/dev)**
+**Parallel training (4 EC2 nodes) — minimal steps**
+1. Upload code + data to S3:
 
-1. Create a virtual environment and activate it:
-
-```powershell
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
+```bash
+aws s3 cp TrainingDataset.csv s3://my-bucket/datasets/TrainingDataset.csv
+aws s3 cp ValidationDataset.csv s3://my-bucket/datasets/ValidationDataset.csv
+aws s3 sync . s3://my-bucket/code/ --exclude '.git/*' --exclude 'model_lr/*'
 ```
 
-2. Fix `requirements.txt` (it currently contains code fences). The expected content should look like:
+2. Create an EMR cluster (1 master + 4 core) via Console or CLI (example CLI skeleton):
 
+```bash
+aws emr create-cluster --name "cs643-pa2" --release-label emr-6.12.0 \
+	--applications Name=Spark --ec2-attributes KeyName=Proj_key2\
+	--instance-type m5.xlarge --instance-count 5 --use-default-roles
 ```
-pyspark
-numpy
-pandas
+
+3. Submit training step (spark-submit on cluster, use S3 paths):
+
+```bash
+spark-submit --master yarn --deploy-mode cluster \
+	s3://my-bucket/code/train.py \
+	s3://my-bucket/datasets/TrainingDataset.csv \
+	s3://my-bucket/datasets/ValidationDataset.csv \
+	s3://my-bucket/models/model_lr
 ```
 
-Save that exact text to `requirements.txt`, then install:
+**Prediction on single EC2 (no Docker)**
+1. Launch one EC2 instance and SSH in.
+2. Install Java, Python, pip and clone your private repo (or download code from S3).
+3. If model is on S3, download it locally:
 
-```powershell
+```bash
+aws s3 cp --recursive s3://my-bucket/models/model_lr ./model_lr
+```
+
+4. Install Python requirements (fix `requirements.txt` first — no markdown fences):
+
+```bash
 pip install -r requirements.txt
 ```
 
-**Run training**
+5. Run prediction:
 
-Using the primary `train.py` (per-repo example, does hyperparam loop over LogisticRegression):
-
-```powershell
-# using spark-submit (recommended when running a real Spark cluster / local spark)
-spark-submit train.py TrainingDataset.csv ValidationDataset.csv model_lr
-
-# or with installed pyspark you may run with plain python
-python train.py TrainingDataset.csv ValidationDataset.csv model_lr
-```
-
-Using the alternate script `code/train_model.py` (RandomForest):
-
-```powershell
-python code\train_model.py TrainingDataset.csv ValidationDataset.csv model_lr
-# or:
-# spark-submit code/train_model.py TrainingDataset.csv ValidationDataset.csv model_lr
-```
-
-Note: `train.py` renames all feature columns to `f0..fN` and the last column to `quality`. `code/train_model.py` currently does not perform that same renaming — see Known Issues.
-
-**Run prediction / evaluation**
-
-```powershell
-spark-submit predict.py model_lr ValidationDataset.csv
-# or
+```bash
 python predict.py model_lr ValidationDataset.csv
 ```
 
-The script prints `F1=<score>` as its primary output.
+The script prints `F1=<0.5718362260106016>`.
 
-**Docker**
+**Build and deploy Docker image for prediction**
+1. Locally (or on EC2) build and tag image:
 
-The included `Dockerfile` builds a prediction container. Before building:
-
-- Ensure `requirements.txt` is fixed (remove markdown/``` fences).
-- The `Dockerfile` sets `JAVA_HOME` to an `arm64` path. On most `python:3.11-slim` images (amd64) Java is installed under `/usr/lib/jvm/java-21-openjdk-amd64`. If your build fails, update `JAVA_HOME` in the `Dockerfile` to match the installed JRE path.
-
-Build and run example:
-
-```powershell
-# from repo root
-docker build -t wine-predict:latest .
-
-docker run --rm wine-predict:latest
+```bash
+docker build -t dockerhub_username/wine-predict:latest .
+docker push dockerhub_username/wine-predict:latest
 ```
 
-**Known issues & recommended fixes**
-- `requirements.txt` currently contains triple-backtick fences (looks like a Markdown snippet). That will break `pip install -r requirements.txt`. Replace it with plain package lines (see Install section).
-- `Dockerfile` `JAVA_HOME` path is architecture-specific. Adjust to your platform or set it dynamically.
-- Inconsistent preprocessing across scripts: `train.py` renames columns to `f0..fN` while `code/train_model.py` omits that step. This can make saved pipelines incompatible with `predict.py` if input column names differ. I recommend extracting the rename/normalize logic into a shared helper (e.g., `code/preprocess.py`) and using it from all scripts.
-- Consider pinning `numpy` and `pandas` versions in `requirements.txt` for reproducibility.
-- Add a short `CONTRIBUTING` or `RUNNING.md` if multiple users will work on this project.
+2. Run container on EC2. If you need to mount local model and data into the container use `-v`:
 
-**Next steps I can take (if you want)**
-- Fix `requirements.txt` and update `Dockerfile` `JAVA_HOME` (quick, low-risk).
-- Add a small `code/preprocess.py` and update `train.py`/`predict.py`/`code/train_model.py` to use it (safe refactor to enforce compatibility).
-- Add a minimal test script or GitHub Actions workflow to run a smoke test.
+```bash
+# example: host has /home/ubuntu/model_lr and /home/ubuntu/ValidationDataset.csv
+sudo docker run --rm -v /home/ubuntu/model_lr:/app/model_lr -v /home/ubuntu/ValidationDataset.csv:/app/ValidationDataset.csv \
+	dockerhub_username/wine-predict:latest
+```
 
-If you want me to apply any of those changes now, tell me which and I will proceed.
+Or pass custom args (if ENTRYPOINT accepts args):
 
----
+```bash
+sudo docker run --rm -v /host/model_lr:/app/model_lr -v /host/ValidationDataset.csv:/app/ValidationDataset.csv \
+	dockerhub_username/wine-predict:latest model_lr ValidationDataset.csv
+```
 
-Created by the repository review assistant. If you'd like the README adjusted (more examples, diagrams, or specific versions), tell me which parts to expand.
+
