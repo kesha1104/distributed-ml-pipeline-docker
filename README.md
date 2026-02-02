@@ -1,4 +1,4 @@
-**CS643 — Project 2 (PA2) — Wine Quality**
+**CS643 — Project 2 (PA2) —  Distributed Machine Learning Pipeline with Docker**
 
 **Name**- **Kesha Dave**
 
